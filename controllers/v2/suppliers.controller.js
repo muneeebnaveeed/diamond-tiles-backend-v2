@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
-const Model = require('../models/suppliers.model');
-const Purchase = require('../models/purchases.model').Model;
+const Model = require('../../models/v2/suppliers.model');
+const Purchase = require('../../models/v2/purchases.model').Model;
 
-const { catchAsync } = require('./errors.controller');
-const AppError = require('../utils/AppError');
-const { convertUnitsOfInventory } = require('../models/purchases.model');
+const { catchAsync } = require('../errors.controller');
+const AppError = require('../../utils/AppError');
+const { convertUnitsOfInventory } = require('../../models/v2/purchases.model');
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
     const { page, limit, sort, search } = req.query;
@@ -59,16 +59,6 @@ module.exports.getOne = catchAsync(async function (req, res, next) {
     });
 });
 
-module.exports.addMany = catchAsync(async function (req, res, next) {
-    const docs = req.body;
-
-    if (!docs || !docs.length) return next(new AppError('Please enter valid suppliers', 400));
-
-    await Model.insertMany(docs);
-
-    res.status(200).json();
-});
-
 module.exports.addOne = catchAsync(async function (req, res, next) {
     const newDoc = _.pick(req.body, ['name', 'phone', 'company']);
     await Model.create(newDoc);
@@ -84,7 +74,7 @@ module.exports.edit = catchAsync(async function (req, res, next) {
 
     if (!Object.keys(newDoc).length) return next(new AppError('Please enter a valid supplier', 400));
 
-    await Model.updateOne({ _id: id }, newDoc, { runValidators: true });
+    await Model.findById(id, newDoc, { runValidators: true });
 
     res.status(200).json();
 });

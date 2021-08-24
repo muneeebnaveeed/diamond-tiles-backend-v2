@@ -6,17 +6,17 @@ const cors = require('cors');
 const Database = require('./utils/db');
 const AppError = require('./utils/AppError');
 
-const tilesRoute = require('./routes/products.route');
-const customersRoute = require('./routes/customers.route');
+const tilesRoute = require('./routes/v2/products.route');
+const customersRoute = require('./routes/v2/customers.route');
 const employeesRoute = require('./routes/employees.route');
-const suppliersRoute = require('./routes/suppliers.route');
-const typesRoute = require('./routes/types.route');
-const unitsRoute = require('./routes/units.route');
-const inventoriesRoute = require('./routes/inventories.route');
-const purchasesRoute = require('./routes/purchases.route');
+const suppliersRoute = require('./routes/v2/suppliers.route');
+const typesRoute = require('./routes/v2/types.route');
+const unitsRoute = require('./routes/v2/units.route');
+const inventoriesRoute = require('./routes/v2/inventories.route');
+const purchasesRoute = require('./routes/v2/purchases.route');
 
-const salesRoute = require('./routes/sales.route');
-const expensesRoute = require('./routes/expenses.route');
+const salesRoute = require('./routes/v2/sales.route');
+const expensesRoute = require('./routes/v2/expenses.route');
 const dashboardRoute = require('./routes/dashboard.route');
 
 const authRoute = require('./routes/auth.route');

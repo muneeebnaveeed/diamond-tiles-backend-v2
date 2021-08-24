@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
-const Model = require('../models/customers.model');
-const Sale = require('../models/sales.model');
-const Type = require('../models/types.model');
-const Expense = require('../models/expenses.model').Model;
+const Model = require('../models/v2/customers.model');
+const Sale = require('../models/v2/sales.model');
+const Type = require('../models/v2/types.model');
+const Expense = require('../models/v2/expenses.model').Model;
 
 const { catchAsync } = require('./errors.controller');
 const AppError = require('../utils/AppError');

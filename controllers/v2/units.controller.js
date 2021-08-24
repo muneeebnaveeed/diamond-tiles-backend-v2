@@ -1,18 +1,21 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
-const Model = require('../models/units.model');
-const Type = require('../models/types.model');
-const { catchAsync } = require('./errors.controller');
-const AppError = require('../utils/AppError');
+const Model = require('../../models/v2/units.model');
+const Type = require('../../models/v2/types.model');
+const { catchAsync } = require('../errors.controller');
+const AppError = require('../../utils/AppError');
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
     const { type } = req.query;
+
+    let query = {};
+
     if (type) {
         if (!mongoose.isValidObjectId(type)) return next(new AppError('Invalid Type ID', 400));
+        query = { 'type._id': type };
     }
-    let docs = await Model.find({}, { __v: 0 }).lean();
 
-    if (type) docs = docs.filter((d) => d.type?._id?.toString() === type);
+    const docs = await Model.find(query, { __v: 0 }).lean();
 
     res.status(200).json(docs);
 });
@@ -22,7 +25,7 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
 
     if (Object.keys(newDoc).length !== 3) return next(new AppError('Please enter a valid unit', 400));
 
-    const type = await Type.findById(newDoc.type).lean();
+    const type = await Type.findById(newDoc.type, { __v: 0 }).lean();
 
     if (!type) return next(new AppError('Type does not exist', 404));
 

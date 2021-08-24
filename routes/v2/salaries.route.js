@@ -1,7 +1,7 @@
 const router = require('express').Router();
 
-const autoParams = require('../utils/autoParams');
-const { getAll, addOne, remove } = require('../controllers/inventories.controller');
+const { getAll, addOne, remove } = require('../../controllers/v2/salaries.controller');
+const autoParams = require('../../utils/autoParams');
 
 router.get('/', autoParams, getAll);
 router.route('/').post(addOne);

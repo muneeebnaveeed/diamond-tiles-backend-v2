@@ -5,8 +5,6 @@ const schema = new mongoose.Schema({
     title: {
         type: String,
         required: [true, 'Please enter a name'],
-        minlength: [3, 'Please enter a bare minimum of 3 characters in title'],
-        maxlength: [25, 'Only 25 characters are allowed in title'],
     },
     value: {
         type: Number,
@@ -14,7 +12,7 @@ const schema = new mongoose.Schema({
         min: [1, 'Please enter a valid value'],
     },
     type: {
-        type: mongoose.SchemaTypes.Mixed,
+        type: mongoose.model('Type').schema,
         required: [true, 'Type is required'],
     },
     // createdBy: { type: mongoose.ObjectId, ref: 'User', select: false },

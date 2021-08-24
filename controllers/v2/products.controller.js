@@ -1,11 +1,12 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
-const Model = require('../models/products.model');
-const Purchase = require('../models/purchases.model').Model;
-const Sale = require('../models/sales.model');
-const Type = require('../models/types.model');
-const { catchAsync } = require('./errors.controller');
-const AppError = require('../utils/AppError');
+const Model = require('../../models/v2/products.model');
+const Purchase = require('../../models/v2/purchases.model').Model;
+const Sale = require('../../models/v2/sales.model');
+const Type = require('../../models/v2/types.model');
+const { catchAsync } = require('../errors.controller');
+const AppError = require('../../utils/AppError');
+const Unit = require('../../models/v2/units.model');
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
     const { page, limit, sort, search } = req.query;
@@ -78,32 +79,23 @@ module.exports.getOne = catchAsync(async function (req, res, next) {
     });
 });
 
-module.exports.addMany = catchAsync(async function (req, res, next) {
-    const docs = req.body.map((b) => _.pick(b, ['modelNumber', 'type']));
-
-    if (docs.some((d) => d.length < 2)) return next(new AppError('Please enter valid products', 400));
-
-    const typeIds = [...new Set(docs.map((d) => d.type))].map((id) => mongoose.Types.ObjectId(id));
-
-    const types = await Type.find({ _id: { $in: typeIds } }, { title: 0, createdAt: 0, __v: 0 }).lean();
-
-    if (types.length !== typeIds.length) return next(new AppError('Type id(s) invalid', 400));
-
-    await Model.insertMany(docs);
-
-    res.status(200).json();
-});
-
 module.exports.addOne = catchAsync(async function (req, res, next) {
-    const newDoc = _.pick(req.body, ['modelNumber', 'type', 'retailPrice', 'unit']);
+    const newDoc = _.pick(req.body, ['modelNumber', 'type', 'unit']);
 
-    if (Object.keys(newDoc).length < 4) return next(new AppError('Please enter a valid product', 400));
+    if (Object.keys(newDoc).length < 3) return next(new AppError('Please enter a valid product', 400));
 
-    const type = await Type.findById(newDoc.type).lean();
+    const [type, unit] = await Promise.all([
+        Type.findById(newDoc.type, { __v: 0 }).lean(),
+        Unit.findById(newDoc.unit, { __v: 0 }).lean(),
+    ]);
 
     if (!type) return next(new AppError('Type does not exist', 404));
+    if (!unit) return next(new AppError('Unit does not exist', 404));
+
+    if (unit.type.title !== type.title) return next(new AppError('Unit not compatible', 400));
 
     newDoc.type = type;
+    newDoc.unit = _.omit(unit, ['type']);
 
     await Model.create(newDoc);
 
@@ -115,15 +107,19 @@ module.exports.edit = catchAsync(async function (req, res, next) {
 
     if (!mongoose.isValidObjectId(id)) return next(new AppError('Please enter a valid id', 400));
 
-    const newDoc = _.pick(req.body, ['modelNumber', 'type', 'retailPrice', 'unit']);
+    const newDoc = _.pick(req.body, ['modelNumber', 'type', 'retailPrice']);
 
     if (!Object.keys(newDoc).length) return next(new AppError('Please enter a valid product', 400));
 
-    const type = await Type.findById(newDoc.type).lean();
+    const [type, unit] = await Promise.all([Type.findById(newDoc.type).lean(), Unit.findById(newDoc.unit)].lean());
 
-    if (!type) return next('Type does not exist', 404);
+    if (!type) return next('Type or unit does not exist', 404);
+    if (!unit) return next('Unit or unit does not exist', 404);
 
-    await Model.updateOne({ _id: id }, newDoc, { runValidators: true });
+    newDoc.type = type;
+    newDoc.unit = unit;
+
+    await Model.findByIdAndUpdate(id, newDoc, { runValidators: true });
 
     res.status(200).json();
 });

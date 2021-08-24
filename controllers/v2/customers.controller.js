@@ -1,9 +1,9 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
-const Model = require('../models/customers.model');
-const Sale = require('../models/sales.model');
-const { catchAsync } = require('./errors.controller');
-const AppError = require('../utils/AppError');
+const Model = require('../../models/v2/customers.model');
+const Sale = require('../../models/v2/sales.model');
+const { catchAsync } = require('../errors.controller');
+const AppError = require('../../utils/AppError');
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
     const { page, limit, sort, search } = req.query;
@@ -46,16 +46,6 @@ module.exports.getOne = catchAsync(async function (req, res, next) {
         customer,
         sales: _.omit(sales, ['page', 'prevPage', 'nextPage', 'limit']),
     });
-});
-
-module.exports.addMany = catchAsync(async function (req, res, next) {
-    const docs = req.body;
-
-    if (!docs || !docs.length) return next(new AppError('Please enter valid customers', 400));
-
-    await Model.insertMany(docs);
-
-    res.status(200).json();
 });
 
 module.exports.addOne = catchAsync(async function (req, res, next) {

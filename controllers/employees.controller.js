@@ -3,7 +3,7 @@ const _ = require('lodash');
 const Model = require('../models/employees.model');
 const { catchAsync } = require('./errors.controller');
 const AppError = require('../utils/AppError');
-const { getSalaries } = require('./expenses.controller');
+const { getSalaries } = require('./v2/expenses.controller');
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
     const { page, limit, sort, search } = req.query;
