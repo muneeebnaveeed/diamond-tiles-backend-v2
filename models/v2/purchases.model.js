@@ -12,26 +12,17 @@ const schema = new mongoose.Schema({
     createdAt: { type: Date, required: true, default: Date.now() },
 });
 
-const convertUnitsOfInventory = (inventory) => {
-    inventory.quantity = { single: inventory.quantity };
+const convertUnits = (quantity, unit) => {
+    if (quantity <= unit) return;
 
-    const { single } = inventory.quantity;
-    const { title, value } = inventory.product.unit;
-    const unitName = title.toLowerCase();
+    const wholeUnits = Math.floor(quantity / unit);
+    const remainingSingles = quantity - wholeUnits * unit;
 
-    if (single <= value) return;
-
-    const wholeUnits = Math.floor(single / value);
-    const remainingSingles = single - wholeUnits * value;
-
-    inventory.quantity[unitName] = [wholeUnits, remainingSingles];
-
-    console.log(inventory);
-    return inventory;
+    return [wholeUnits, remainingSingles];
 };
 
 schema.plugin(mongoosePagiante);
 
 const Model = mongoose.model('Purchase', schema);
 
-module.exports = { Model, convertUnitsOfInventory };
+module.exports = { Model, convertUnits };

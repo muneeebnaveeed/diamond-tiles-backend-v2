@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
 const axios = require('axios');
-const { Model, convertUnitsOfInventory } = require('../../models/v2/purchases.model');
+const { Model, convertUnits } = require('../../models/v2/purchases.model');
 const Product = require('../../models/v2/products.model');
 const Unit = require('../../models/v2/units.model');
 const Sale = require('../../models/v2/sales.model');
@@ -27,7 +27,17 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
     );
 
     // eslint-disable-next-line no-param-reassign
-    // results.docs.forEach((d) => (d = convertUnitsOfInventory(d)));
+    results.docs.forEach((d) => {
+        d.products.forEach((p) => {
+            const unit = p.product.unit.value;
+            if (p.quantity) p.quantity = convertUnits(p.quantity, unit);
+            else {
+                Object.entries(p.variants).forEach(([key, value]) => {
+                    p.variants[key] = convertUnits(value, unit);
+                });
+            }
+        });
+    });
 
     res.status(200).json(
         _.pick(results, ['docs', 'totalDocs', 'hasPrevPage', 'hasNextPage', 'totalPages', 'pagingCounter'])
