@@ -17,6 +17,8 @@ const purchasesRoute = require('./routes/v2/purchases.route');
 
 const salesRoute = require('./routes/v2/sales.route');
 const expensesRoute = require('./routes/v2/expenses.route');
+const salariesRoute = require('./routes/v2/salaries.route');
+
 const dashboardRoute = require('./routes/dashboard.route');
 
 const authRoute = require('./routes/auth.route');
@@ -48,6 +50,8 @@ app.listen(port, () => {
     app.use('/products', protect, tilesRoute);
     app.use('/customers', protect, customersRoute);
     app.use('/employees', protect, employeesRoute);
+    app.use('/salaries', protect, salariesRoute);
+
     app.use('/suppliers', protect, suppliersRoute);
     app.use('/types', protect, typesRoute);
     app.use('/units', protect, unitsRoute);

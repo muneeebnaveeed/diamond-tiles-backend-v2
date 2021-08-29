@@ -8,8 +8,6 @@ const schema = new mongoose.Schema({
     name: {
         type: String,
         required: [true, 'Please enter a name'],
-        minLength: [6, 'Minimum of 6 characters are required'],
-        maxLength: [25, 'Maximum of 25 characters are allowed'],
         unique: true,
         sparse: true,
         uniqueCaseInsensitive: true,

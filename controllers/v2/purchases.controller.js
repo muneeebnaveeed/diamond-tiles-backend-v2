@@ -6,7 +6,7 @@ const Product = require('../../models/v2/products.model');
 const Unit = require('../../models/v2/units.model');
 const Sale = require('../../models/v2/sales.model');
 const Inventory = require('../../models/v2/inventories.model');
-const { addInventory } = require('./inventories.controller');
+const { createInventories } = require('./inventories.controller');
 
 const Supplier = require('../../models/v2/suppliers.model');
 const { catchAsync } = require('../errors.controller');
@@ -30,8 +30,8 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
     results.docs.forEach((d) => {
         d.products.forEach((p) => {
             const unit = p.product.unit.value;
-            if (p.quantity) p.quantity = convertUnits(p.quantity, unit);
-            else {
+            if (p.quantity !== undefined && p.quantity !== null) p.quantity = convertUnits(p.quantity, unit);
+            else if (p.variants) {
                 Object.entries(p.variants).forEach(([key, value]) => {
                     p.variants[key] = convertUnits(value, unit);
                 });
@@ -47,9 +47,12 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
 module.exports.getOne = catchAsync(async function (req, res, next) {
     const { id } = req.params;
 
+    if (!mongoose.isValidObjectId(id)) return next(new AppError('Invalid purchase id', 400));
+
     const doc = await Model.findById(id).lean();
 
     if (!doc) return next(new AppError('Purchase not found', 404));
+
     res.status(200).json(doc);
 });
 
@@ -89,13 +92,24 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
         products.push(p);
     }
 
-    const sourcePrice = products.map((p) => p.sourcePrice).reduce((a, b) => a + b);
+    const sourcePrices = products.map((p) => p.sourcePrice);
+    const sourcePrice = sourcePrices.length > 1 ? sourcePrices.reduce((a, b) => a + b) : sourcePrices[0];
     body.isRemaining = body.paid < sourcePrice;
+    body.totalSourcePrice = sourcePrice;
 
     // await addInventory({ product: product._id, quantity: body.quantity }, next);
 
     body.supplier = supplier;
     body.products = products;
+
+    const inventories = products.map((p) => {
+        const inventory = { product: p.product._id };
+        if (p.product.type.title.toLowerCase() === 'tile') inventory.variants = p.variants;
+        else inventory.quantity = p.quantity;
+        return inventory;
+    });
+
+    await createInventories(inventories);
 
     await Model.create(body);
     res.status(200).send();
@@ -112,18 +126,16 @@ module.exports.pay = catchAsync(async function (req, res, next) {
 
     if (!purchase) return next(new AppError('Purchase does not exist', 404));
 
-    const { products } = purchase;
+    const { totalSourcePrice } = purchase;
     const oldPaid = purchase.paid;
 
-    const sourcePrice = products.map((p) => p.sourcePrice).reduce((a, b) => a + b);
-
     purchase.paid += amount;
-    if (purchase.paid > sourcePrice)
+    if (purchase.paid > totalSourcePrice)
         return next(
-            new AppError(`Cannot clear khaata more than remaining. Only ${sourcePrice - oldPaid} remaining.`, 400)
+            new AppError(`Cannot clear khaata more than remaining. Only ${totalSourcePrice - oldPaid} remaining.`, 400)
         );
 
-    purchase.isRemaining = purchase.paid < sourcePrice;
+    purchase.isRemaining = purchase.paid < totalSourcePrice;
 
     await purchase.save();
 
@@ -158,6 +170,7 @@ module.exports.refund = catchAsync(async function (req, res, next) {
         const { unit } = b.product;
         const { products } = purchase;
         let newSourcePrice = null;
+        let deleteProduct = false;
 
         if (b.variants) {
             const oldQuantities = Object.values(products[index].variants);
@@ -176,6 +189,8 @@ module.exports.refund = catchAsync(async function (req, res, next) {
                 newQuantities.length > 1 ? newQuantities.reduce((x, y) => x + y) : newQuantities[0];
 
             newSourcePrice = Math.round(oldSourcePricePerUnit * newTotalQuantity);
+
+            if (newTotalQuantity < 1) deleteProduct = true;
         } else {
             const quantity = readQuantityFromString(b.quantity, unit.value);
             const oldSourcePricePerUnit = quantity / b.sourcePrice;
@@ -184,9 +199,12 @@ module.exports.refund = catchAsync(async function (req, res, next) {
 
             if (products[index].quantity < 0)
                 return next(new AppError('Cannot refund more than initial purchase', 404));
+
+            if (products[index].quantity === 0) deleteProduct = true;
         }
 
-        products[index].sourcePrice = newSourcePrice;
+        if (!deleteProduct) products[index].sourcePrice = newSourcePrice;
+        else products.splice(index, 1);
 
         promises.push(Model.findByIdAndUpdate(id, { products }));
     }

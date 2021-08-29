@@ -8,6 +8,7 @@ const { catchAsync } = require('../errors.controller');
 const AppError = require('../../utils/AppError');
 const Type = require('../../models/v2/types.model');
 const { readQuantityFromString } = require('../../utils/readUnit');
+const { convertUnits } = require('../../models/v2/purchases.model');
 
 module.exports.getCount = catchAsync(async function (req, res, next) {
     const count = await Model.count({});
@@ -30,6 +31,17 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
     );
 
     // results.docs.forEach((d) => (d = convertUnitsOfInventory(d)));
+    results.docs.forEach((d) => {
+        d.products.forEach((p) => {
+            const unit = p.product.unit.value;
+            if (p.quantity !== undefined && p.quantity !== null) p.quantity = convertUnits(p.quantity, unit);
+            else if (p.variants) {
+                Object.entries(p.variants).forEach(([key, value]) => {
+                    p.variants[key] = convertUnits(value, unit);
+                });
+            }
+        });
+    });
 
     res.status(200).json(
         _.pick(results, ['docs', 'totalDocs', 'hasPrevPage', 'hasNextPage', 'totalPages', 'pagingCounter'])
@@ -38,6 +50,8 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
 
 module.exports.getOne = catchAsync(async function (req, res, next) {
     const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) return next(new AppError('Invalid sale id', 400));
 
     const doc = await Model.findById(id);
 
@@ -59,7 +73,7 @@ module.exports.pay = catchAsync(async function (req, res, next) {
 
     if (!sale) return next(new AppError('Inventory does not exist', 404));
 
-    const { sourcePrice, paid, isRemaining } = sale;
+    const { totalRetailPrice, paid, isRemaining } = sale;
 
     if (!isRemaining) return next(new AppError('Khaata is already cleared', 400));
 
@@ -67,7 +81,7 @@ module.exports.pay = catchAsync(async function (req, res, next) {
 
     sale.paid += amount;
 
-    if (sale.paid >= sourcePrice) sale.isRemaining = false;
+    if (sale.paid >= totalRetailPrice) sale.isRemaining = false;
 
     await sale.save();
 
@@ -89,39 +103,69 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
 
     console.log(productIds);
 
-    const productsInDB = await Inventory.find({ 'product._id': { $in: productIds } }, { __v: 0 }).lean();
+    const inventoriesInDB = await Inventory.find({ 'product._id': { $in: productIds } }, { __v: 0 }).lean();
     const products = [];
+    const promises = [];
+
+    console.log(inventoriesInDB);
 
     for (const p of body.products) {
-        const inventory = productsInDB.find((e) => e.product._id.toString() === p.product);
+        const inventory = inventoriesInDB.find((e) => e.product._id.toString() === p.product);
+
+        if (!inventory) return next(new AppError('Product not in stock', 404));
+
         p.product = inventory.product;
         if (!p.product) return next(new AppError('Product does not exist', 404));
         const { type, unit } = inventory.product;
 
         if (type.title.toLowerCase() === 'tile') {
             const variants = {};
+            const inventoryVariants = {};
             Object.entries(p.variants).forEach(([key, value]) => {
-                variants[key] = readQuantityFromString(value, unit.value);
+                const quantity = readQuantityFromString(value, unit.value);
+                variants[key] = quantity;
+
+                const inventoryQuantity = inventory.variants[key] - quantity;
+
+                if (inventoryQuantity < 0) return next(new AppError('Insufficient inventory', 404));
+
+                inventoryVariants[key] = inventoryQuantity;
             });
+
+            Object.entries(inventoryVariants).forEach(([key, value]) => {
+                if (value === 0) delete inventoryVariants[key];
+            });
+
+            promises.push(Inventory.findByIdAndUpdate(inventory._id, { variants: inventoryVariants }));
+
             p.variants = variants;
         } else {
             const quantity = readQuantityFromString(p.quantity, unit.value);
             p.quantity = quantity;
+            inventory.quantity -= quantity;
+
+            if (inventory.quantity === 0) promises.push(Inventory.findByIdAndDelete(inventory._id));
+            else if (inventory.quantity < 0) return next(new AppError('Insufficient inventory', 404));
+            else promises.push(Inventory.findByIdAndUpdate({ quantity: inventory.quantity }));
         }
 
         products.push(p);
     }
 
-    const sourcePrice =
-        products.length > 1 ? products.map((p) => p.sourcePrice).reduce((a, b) => a + b) : products[0].sourcePrice;
-    body.isRemaining = body.paid < sourcePrice;
+    const totalRetailPrice =
+        products.length > 1 ? products.map((p) => p.retailPrice).reduce((a, b) => a + b) : products[0].retailPrice;
+    body.isRemaining = body.paid < totalRetailPrice;
 
     // await addInventory({ product: product._id, quantity: body.quantity }, next);
 
     body.customer = customer;
     body.products = products;
+    body.totalRetailPrice = totalRetailPrice;
 
-    await Model.create(body);
+    console.log(body);
+    console.log(totalRetailPrice);
+
+    await Promise.all([Model.create(body), ...promises]);
     res.status(200).send();
 });
 

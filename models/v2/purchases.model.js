@@ -8,13 +8,12 @@ const schema = new mongoose.Schema({
         type: Number,
         required: [true, 'Please enter paid price'],
     },
+    totalSourcePrice: { type: Number, required: [true, 'Please enter total source price'] },
     isRemaining: Boolean,
     createdAt: { type: Date, required: true, default: Date.now() },
 });
 
 const convertUnits = (quantity, unit) => {
-    if (quantity <= unit) return;
-
     const wholeUnits = Math.floor(quantity / unit);
     const remainingSingles = quantity - wholeUnits * unit;
 

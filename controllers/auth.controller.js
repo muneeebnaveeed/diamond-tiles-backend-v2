@@ -8,18 +8,16 @@ const { catchAsync } = require('./errors.controller');
 const AppError = require('../utils/AppError');
 
 module.exports.getUsers = catchAsync(async function (req, res, next) {
-    const { page, limit, sort } = req.query;
+    const { page, limit, sort, search } = req.query;
 
-    const results = await User.paginate({}, { projection: { __v: 0 }, lean: true, page, limit, sort });
+    const results = await User.paginate(
+        { name: { $regex: `${search}`, $options: 'i' } },
+        { projection: { __v: 0, password: 0 }, lean: true, page, limit, sort: { isConfirmed: 1 } }
+    );
 
     res.status(200).json(
         _.pick(results, ['docs', 'totalDocs', 'hasPrevPage', 'hasNextPage', 'totalPages', 'pagingCounter'])
     );
-});
-
-module.exports.getPendingUsers = catchAsync(async function (req, res, next) {
-    const pendingUsers = await User.find({ isConfirmed: false }).select('_id name role');
-    res.status(200).json(pendingUsers);
 });
 
 module.exports.registerUser = catchAsync(async function (req, res, next) {
@@ -148,4 +146,18 @@ module.exports.decodeToken = catchAsync(async function (req, res, next) {
     const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id, { __v: 0, password: 0 }).lean();
     res.status(200).json(user);
+});
+
+module.exports.remove = catchAsync(async function (req, res, next) {
+    let ids = req.params.id.split(',');
+
+    for (const id of ids) {
+        if (!mongoose.isValidObjectId(id)) return next(new AppError('Please enter valid id(s)', 400));
+    }
+
+    ids = ids.map((id) => mongoose.Types.ObjectId(id));
+
+    await User.deleteMany({ _id: { $in: ids } });
+
+    res.status(200).json();
 });

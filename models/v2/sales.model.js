@@ -9,6 +9,7 @@ const schema = new mongoose.Schema({
         required: [true, 'Please enter paid price'],
     },
     isRemaining: Boolean,
+    totalRetailPrice: Number,
     // createdBy: { type: mongoose.ObjectId, ref: 'User', select: false },
     createdAt: { type: Date, required: true, default: Date.now() },
 });

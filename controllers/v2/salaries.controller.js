@@ -14,7 +14,7 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
         page,
         limit,
     });
-    res.status(200).json(docs);
+    res.status(200).json(_.omit(docs, ['nextPage', 'prevPage', 'page', 'limit', 'offset']));
 });
 
 module.exports.addOne = catchAsync(async function (req, res, next) {
