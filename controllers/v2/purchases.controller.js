@@ -19,10 +19,10 @@ module.exports.getCount = catchAsync(async function (req, res, next) {
 });
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
-    const { page, limit, sort } = req.query;
+    const { page, limit, sort, startDate, endDate } = req.query;
 
     const results = await Model.paginate(
-        {},
+        { createdAt: { $gte: startDate, $lte: endDate } },
         { projection: { __v: 0 }, populate: { path: 'supplier', select: '-__v' }, lean: true, page, limit, sort }
     );
 

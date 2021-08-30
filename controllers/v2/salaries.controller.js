@@ -8,12 +8,15 @@ const Employee = require('../../models/employees.model');
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
     const { page, limit } = req.query;
-    const docs = await Model.paginate({
-        projection: { __v: 0 },
-        populate: { path: 'employee', select: '-__v' },
-        page,
-        limit,
-    });
+    const docs = await Model.paginate(
+        {},
+        {
+            projection: { __v: 0 },
+            populate: { path: 'employee', select: '_id name' },
+            page,
+            limit,
+        }
+    );
     res.status(200).json(_.omit(docs, ['nextPage', 'prevPage', 'page', 'limit', 'offset']));
 });
 

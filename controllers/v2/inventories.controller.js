@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
+const dayjs = require('dayjs');
 const Model = require('../../models/v2/inventories.model');
 const Product = require('../../models/v2/products.model');
 const Unit = require('../../models/v2/units.model');
@@ -31,8 +32,9 @@ async function createInventories(inventories, next) {
                         : readQuantityFromString(b.quantity, b.product.unit.value);
             else if (b.variants)
                 Object.entries(b.variants).forEach(([key, value]) => {
-                    inventoryInDB.variants[key] +=
-                        typeof value === 'number' ? value : readQuantityFromString(value, b.product.unit.value);
+                    let q = inventoryInDB.variants[key] ?? 0;
+                    q += typeof value === 'number' ? value : readQuantityFromString(value, b.product.unit.value);
+                    inventoryInDB.variants[key] = q;
                 });
             else return next(new AppError('Something went wrong', 400));
 
@@ -63,9 +65,15 @@ async function createInventories(inventories, next) {
 module.exports.createInventories = createInventories;
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
-    const { page, limit, sort } = req.query;
+    const { page, limit, sort, search, startDate, endDate } = req.query;
 
-    const results = await Model.paginate({}, { projection: { __v: 0 }, lean: true, page, limit, sort });
+    const results = await Model.paginate(
+        {
+            'product.modelNumber': { $regex: `${search}`, $options: 'i' },
+            createdAt: { $gte: startDate, $lte: endDate },
+        },
+        { projection: { __v: 0 }, lean: true, page, limit, sort }
+    );
 
     // eslint-disable-next-line no-param-reassign
     results.docs.forEach((d) => {

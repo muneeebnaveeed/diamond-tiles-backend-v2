@@ -5,6 +5,7 @@ const schema = new mongoose.Schema({
     product: { type: mongoose.SchemaTypes.Mixed, required: [true, 'Please enter a product'] },
     quantity: Number,
     variants: {},
+    createdAt: { type: Date, required: true, default: Date.now() },
 });
 
 schema.plugin(mongoosePagiante);
