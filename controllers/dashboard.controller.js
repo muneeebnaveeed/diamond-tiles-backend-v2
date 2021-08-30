@@ -1,48 +1,84 @@
 const mongoose = require('mongoose');
 const _ = require('lodash');
+const Purchase = require('../models/v2/purchases.model').Model;
 const Model = require('../models/v2/customers.model');
 const Sale = require('../models/v2/sales.model');
 const Type = require('../models/v2/types.model');
-const Expense = require('../models/v2/expenses.model').Model;
+const Expense = require('../models/v2/expenses.model');
+const Salary = require('../models/v2/salaries.model');
 
 const { catchAsync } = require('./errors.controller');
 const AppError = require('../utils/AppError');
 
-async function getExpenses() {
-    const salaryType = await Type.findOne({ title: 'salary' }).lean();
+module.exports.getPurchases = catchAsync(async function (req, res, next) {
+    const { startDate, endDate } = req.query;
 
-    if (!salaryType) return 0;
+    const results = await Purchase.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const sum = results.map((item) => item.totalSourcePrice).reduce((prev, curr) => prev + curr, 0);
 
-    const expenses = await Expense.find({ type: { $ne: salaryType._id } }).lean();
+    console.log({ sum });
 
-    const amounts = [];
-    expenses.forEach((expense) => amounts.push(expense.amount));
-    const amount = amounts.reduce((a, b) => a + b);
+    res.status(200).send({
+        sum,
+        count: results.length,
+    });
+});
 
-    return amount;
+module.exports.getSales = catchAsync(async function (req, res, next) {
+    const { startDate, endDate } = req.query;
+
+    const results = await Sale.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const sum = results.map((item) => item.totalRetailPrice).reduce((prev, curr) => prev + curr, 0);
+
+    console.log({ sum });
+
+    res.status(200).send({
+        sum,
+        count: results.length,
+    });
+});
+async function getRevenue(startDate, endDate) {
+    const saleDocs = await Sale.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const purchaseDocs = await Purchase.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+
+    const totalRetailPrice = saleDocs.map((item) => item.totalRetailPrice).reduce((prev, curr) => prev + curr, 0);
+    const totalPurchasePrice = purchaseDocs.map((item) => item.totalSourcePrice).reduce((prev, curr) => prev + curr, 0);
+    return totalRetailPrice - totalPurchasePrice;
+}
+module.exports.getRevenue = catchAsync(async function (req, res, next) {
+    const { startDate, endDate } = req.query;
+
+    const revenue = await getRevenue(startDate, endDate);
+
+    res.status(200).send({
+        revenue,
+    });
+});
+
+async function getExpenses(startDate, endDate) {
+    const expenses = await Expense.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const totalExpenses = expenses.map((item) => item.amount).reduce((prev, curr) => prev + curr, 0);
+
+    const salaries = await Salary.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const totalSalaries = salaries.map((item) => item.amount).reduce((prev, curr) => prev + curr, 0);
+
+    return totalExpenses + totalSalaries;
 }
 
 module.exports.getProfit = catchAsync(async function (req, res, next) {
-    const { type } = req.params;
+    // Revenue - Expenses
+    const { startDate, endDate } = req.query;
 
-    if (!['gross', 'net'].includes(type.toLowerCase()))
-        return next(new AppError('Invalid profit type. Profit type can only be NET or GROSS', 400));
+    const revenue = await getRevenue(startDate, endDate);
+    const expenses = await getExpenses(startDate, endDate);
 
-    const sales = await Sale.find().lean();
-    const profits = [];
-    sales.forEach((sale) => profits.push(sale.retailPrice - sale.inventory.sourcePrice));
-    let profit = profits.reduce((a, b) => a + b);
-
-    if (type === 'net') {
-        const expenses = await getExpenses();
-        profit -= expenses;
-    }
-
-    res.status(200).json(profit);
+    res.status(200).json({ profit: revenue - expenses });
 });
 
 module.exports.getExpenses = catchAsync(async function (req, res, next) {
-    const amount = await getExpenses();
+    const { startDate, endDate } = req.query;
+
+    const amount = await getExpenses(startDate, endDate);
     res.status(200).json(amount);
 });
 
