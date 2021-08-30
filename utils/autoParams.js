@@ -9,17 +9,27 @@ module.exports = function (req, res, next) {
 
     const { startDate, endDate } = req.query;
 
+    // console.log('frontend', startDate, endDate);
+
     let dateToBeConverted = null;
 
     if (startDate) dateToBeConverted = startDate;
-    else dateToBeConverted = Date.now();
+    else dateToBeConverted = new Date();
+
+    // console.log('startDateBefore', dateToBeConverted);
 
     req.query.startDate = dayjs(dateToBeConverted).utcOffset(0).startOf('day').toDate();
 
+    // console.log('startDateAfter', req.query.startDate);
+
     if (endDate) dateToBeConverted = endDate;
-    else dateToBeConverted = Date.now();
+    else dateToBeConverted = new Date();
+
+    // console.log('endDateBefore', dateToBeConverted);
 
     req.query.endDate = dayjs(dateToBeConverted).utcOffset(0).endOf('day').toDate();
+
+    // console.log('endDateAfter', req.query.endDate);
 
     next();
 };

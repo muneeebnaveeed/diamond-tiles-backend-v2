@@ -4,11 +4,11 @@ const autoParams = require('../utils/autoParams');
 const { getAll, addOne, edit, remove, getOne } = require('../controllers/v2/customers.controller');
 const { getPurchases, getSales, getRevenue, getProfit, getExpenses } = require('../controllers/dashboard.controller');
 
-router.get('/purchases', getPurchases);
-router.get('/sales', getSales);
-router.get('/revenue', getRevenue);
-router.get('/expenses', getExpenses);
-router.get('/profit', getProfit);
+router.get('/purchases', autoParams, getPurchases);
+router.get('/sales', autoParams, getSales);
+router.get('/revenue', autoParams, getRevenue);
+router.get('/expenses', autoParams, getExpenses);
+router.get('/profit', autoParams, getProfit);
 
 router.get('/', autoParams, getAll);
 router.get('/id/:id', autoParams, getOne);

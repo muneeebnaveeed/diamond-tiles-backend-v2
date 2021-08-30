@@ -16,8 +16,6 @@ module.exports.getPurchases = catchAsync(async function (req, res, next) {
     const results = await Purchase.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
     const sum = results.map((item) => item.totalSourcePrice).reduce((prev, curr) => prev + curr, 0);
 
-    console.log({ sum });
-
     res.status(200).send({
         sum,
         count: results.length,
@@ -38,21 +36,29 @@ module.exports.getSales = catchAsync(async function (req, res, next) {
     });
 });
 async function getRevenue(startDate, endDate) {
-    const saleDocs = await Sale.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
-    const purchaseDocs = await Purchase.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const sales = await Sale.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
+    const retailPrices = sales.map((item) => item.totalRetailPrice);
+    const sourcePrices = [];
 
-    const totalRetailPrice = saleDocs.map((item) => item.totalRetailPrice).reduce((prev, curr) => prev + curr, 0);
-    const totalPurchasePrice = purchaseDocs.map((item) => item.totalSourcePrice).reduce((prev, curr) => prev + curr, 0);
-    return totalRetailPrice - totalPurchasePrice;
+    sales.forEach((sale) => sale.products.forEach((product) => sourcePrices.push(product.sourcePrice)));
+
+    let retailPrice = 0;
+    if (retailPrices.length) {
+        retailPrice = retailPrices.length > 1 ? retailPrices.reduce((prev, curr) => prev + curr, 0) : retailPrices[0];
+    }
+    let sourcePrice = 0;
+    if (sourcePrices.length) {
+        sourcePrice = sourcePrices.length > 1 ? sourcePrices.reduce((prev, curr) => prev + curr, 0) : sourcePrices[0];
+    }
+
+    return retailPrice - sourcePrice;
 }
 module.exports.getRevenue = catchAsync(async function (req, res, next) {
     const { startDate, endDate } = req.query;
 
     const revenue = await getRevenue(startDate, endDate);
 
-    res.status(200).send({
-        revenue,
-    });
+    res.status(200).json(revenue);
 });
 
 async function getExpenses(startDate, endDate) {

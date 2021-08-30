@@ -118,6 +118,8 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
         if (!p.product) return next(new AppError('Product does not exist', 404));
         const { type, unit } = inventory.product;
 
+        console.log('type', type);
+
         if (type.title.toLowerCase() === 'tile') {
             const variants = {};
             const inventoryVariants = {};
@@ -146,7 +148,7 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
 
             if (inventory.quantity === 0) promises.push(Inventory.findByIdAndDelete(inventory._id));
             else if (inventory.quantity < 0) return next(new AppError('Insufficient inventory', 404));
-            else promises.push(Inventory.findByIdAndUpdate({ quantity: inventory.quantity }));
+            else promises.push(Inventory.findByIdAndUpdate(inventory._id, { quantity: inventory.quantity }));
         }
 
         products.push(p);
