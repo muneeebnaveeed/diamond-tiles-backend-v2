@@ -65,12 +65,11 @@ async function createInventories(inventories, next) {
 module.exports.createInventories = createInventories;
 
 module.exports.getAll = catchAsync(async function (req, res, next) {
-    const { page, limit, sort, search, startDate, endDate } = req.query;
+    const { page, limit, sort, search } = req.query;
 
     const results = await Model.paginate(
         {
             'product.modelNumber': { $regex: `${search}`, $options: 'i' },
-            createdAt: { $gte: startDate, $lte: endDate },
         },
         { projection: { __v: 0 }, lean: true, page, limit, sort }
     );

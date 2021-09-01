@@ -25,6 +25,7 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
     if (!mongoose.isValidObjectId(body.employee)) return next(new AppError('Invalid employee id', 400));
     const employee = await Employee.findById(body.employee);
     if (!employee) return next(new AppError('Employee does not exist', 404));
+    body.employee = employee;
     await Model.create(body);
     res.status(200).send();
 });
