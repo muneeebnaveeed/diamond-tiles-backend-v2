@@ -49,7 +49,7 @@ module.exports.getOne = catchAsync(async function (req, res, next) {
 
     if (!mongoose.isValidObjectId(id)) return next(new AppError('Invalid purchase id', 400));
 
-    const doc = await Model.findById(id).lean();
+    const doc = await Model.findById(id).populate('supplier').lean();
 
     if (!doc) return next(new AppError('Purchase not found', 404));
 
@@ -106,6 +106,81 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
         const inventory = { product: p.product._id };
         if (p.product.type.title.toLowerCase() === 'tile') inventory.variants = p.variants;
         else inventory.quantity = p.quantity;
+        return inventory;
+    });
+
+    await createInventories(inventories);
+
+    await Model.create(body);
+    res.status(200).send();
+});
+
+module.exports.edit = catchAsync(async function (req, res, next) {
+    const body = _.pick(req.body, ['supplier', 'products', 'paid']);
+    const { purchaseId } = req.params;
+
+    if (Object.keys(body).length < 3) return next(new AppError('Please enter a valid purchase', 400));
+
+    if (!mongoose.isValidObjectId(body.supplier)) return next(new AppError('Please enter a valid supplier id', 400));
+
+    const supplier = await Supplier.findById(body.supplier).lean();
+
+    if (!supplier) return next(new AppError('Supplier does not exist', 404));
+
+    const productIds = body.products.map((p) => mongoose.Types.ObjectId(p.product));
+
+    const [productsInDB, existingPurchase] = await Promise.all([
+        Product.find({ _id: { $in: productIds } }, { __v: 0 }).lean(),
+        Model.findById(purchaseId, { __v: 0 }),
+    ]);
+
+    const products = [];
+
+    for (const p of body.products) {
+        p.product = productsInDB.find((e) => e._id.toString() === p.product);
+        if (!p.product) return next(new AppError('Product does not exist', 404));
+        const { type, unit } = p.product;
+
+        if (type.title.toLowerCase() === 'tile') {
+            const variants = {};
+            Object.entries(p.variants).forEach(([key, value]) => {
+                variants[key] = readQuantityFromString(value, unit.value);
+            });
+            p.variants = variants;
+        } else {
+            const quantity = readQuantityFromString(p.quantity, unit.value);
+            p.quantity = quantity;
+        }
+
+        products.push(p);
+    }
+
+    const sourcePrices = products.map((p) => p.sourcePrice);
+    const sourcePrice = sourcePrices.length > 1 ? sourcePrices.reduce((a, b) => a + b) : sourcePrices[0];
+    body.isRemaining = body.paid < sourcePrice;
+    body.totalSourcePrice = sourcePrice;
+
+    // await addInventory({ product: product._id, quantity: body.quantity }, next);
+
+    body.supplier = supplier;
+    body.products = products;
+
+    const inventories = products.map((p) => {
+        const inventory = { product: p.product._id };
+        const existingProduct = existingPurchase.products.find((e) => e._id.toString() === inventory.product);
+
+        if (p.product.type.title.toLowerCase() === 'tile') {
+            if (!existingProduct) inventory.variants = p.variants;
+            else {
+                const existingVariants = { ...existingProduct.variants };
+                Object.entries(p.variants).forEach(([key, value]) => {
+                    if (existingVariants[key]) existingVariants[key] = -existingVariants[key] + value;
+                    else existingVariants[key] = value;
+                });
+                inventory.variants = existingVariants;
+            }
+        } else if (!existingProduct) inventory.quantity = p.quantity;
+        else inventory.quantity = p.quantity + -existingProduct.quantity;
         return inventory;
     });
 

@@ -1,5 +1,5 @@
 ## Diamond Tiles POS Backend
-###### Developed and Maintained by [Hassan Naveed](http://github.com/hassannaveed24) and [Muneeb Naveed](http://github.com/muneeebnaveeed)
+###### Developed and Maintained by [Muneeb Naveed](http://github.com/muneeebnaveeed)
 Backend application for serving data from MongoDB database to React frontend (built in NodeJS)
 #### Initializing
 - Install project dependencies. To install the project dependencies:
