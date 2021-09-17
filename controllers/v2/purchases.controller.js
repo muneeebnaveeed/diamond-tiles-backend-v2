@@ -6,12 +6,16 @@ const Product = require('../../models/v2/products.model');
 const Unit = require('../../models/v2/units.model');
 const Sale = require('../../models/v2/sales.model');
 const Inventory = require('../../models/v2/inventories.model');
-const { createInventories } = require('./inventories.controller');
+const { createInventories, consumeInventories } = require('./inventories.controller');
 
 const Supplier = require('../../models/v2/suppliers.model');
 const { catchAsync } = require('../errors.controller');
 const AppError = require('../../utils/AppError');
-const { readLastValue, skipLastValue, readQuantityFromString } = require('../../utils/readUnit');
+const { readQuantityFromString } = require('../../utils/readUnit');
+const Logger = require('../../utils/logger');
+const stringify = require('../../utils/stringify');
+
+const logger = Logger('Purchases');
 
 module.exports.getCount = catchAsync(async function (req, res, next) {
     const count = await Model.count({});
@@ -26,6 +30,8 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
         { projection: { __v: 0 }, populate: { path: 'supplier', select: '-__v' }, lean: true, page, limit, sort }
     );
 
+    // logger.debug(`getAll() results ${stringify(results, null, 2)}`);
+
     // eslint-disable-next-line no-param-reassign
     results.docs.forEach((d) => {
         d.products.forEach((p) => {
@@ -39,6 +45,8 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
         });
     });
 
+    // logger.debug(`getAll() processedResults ${stringify(results, null, 2)}`);
+
     res.status(200).json(
         _.pick(results, ['docs', 'totalDocs', 'hasPrevPage', 'hasNextPage', 'totalPages', 'pagingCounter'])
     );
@@ -51,6 +59,8 @@ module.exports.getOne = catchAsync(async function (req, res, next) {
 
     const doc = await Model.findById(id).populate('supplier').lean();
 
+    logger.debug(`getAll() doc ${stringify(doc, null, 2)}`);
+
     if (!doc) return next(new AppError('Purchase not found', 404));
 
     res.status(200).json(doc);
@@ -59,45 +69,65 @@ module.exports.getOne = catchAsync(async function (req, res, next) {
 module.exports.addOne = catchAsync(async function (req, res, next) {
     const body = _.pick(req.body, ['supplier', 'products', 'paid']);
 
+    logger.debug(`addOne() body ${stringify(body)}`);
+
     if (Object.keys(body).length < 3) return next(new AppError('Please enter a valid purchase', 400));
 
     if (!mongoose.isValidObjectId(body.supplier)) return next(new AppError('Please enter a valid supplier id', 400));
 
     const supplier = await Supplier.findById(body.supplier).lean();
 
+    logger.debug(`addOne() supplier ${stringify(supplier)}`);
+
     if (!supplier) return next(new AppError('Supplier does not exist', 404));
 
     const productIds = body.products.map((p) => mongoose.Types.ObjectId(p.product));
 
+    logger.debug(`addOne() productIds ${stringify(productIds)}`);
+
     const productsInDB = await Product.find({ _id: { $in: productIds } }, { __v: 0 }).lean();
+
+    logger.debug(`addOne() productsInDB ${stringify(productsInDB)}`);
 
     const products = [];
 
-    for (const p of body.products) {
+    body.products.forEach((p, index) => {
+        logger.debug(`addOne() p ${stringify(p)} index ${stringify(index)}`);
+
         p.product = productsInDB.find((e) => e._id.toString() === p.product);
+
+        logger.debug(`addOne() p.product ${stringify(p.product)}`);
+
         if (!p.product) return next(new AppError('Product does not exist', 404));
         const { type, unit } = p.product;
 
         if (type.title.toLowerCase() === 'tile') {
             const variants = {};
             Object.entries(p.variants).forEach(([key, value]) => {
-                variants[key] = readQuantityFromString(value, unit.value);
+                const variant = readQuantityFromString(value, unit.value);
+                logger.debug(`addOne() value ${stringify(value)} variant ${stringify(variant)}`);
+                variants[key] = variant;
             });
             p.variants = variants;
         } else {
             const quantity = readQuantityFromString(p.quantity, unit.value);
+            logger.debug(`addOne() quantity ${stringify(quantity)}`);
             p.quantity = quantity;
         }
 
         products.push(p);
-    }
+    });
 
     const sourcePrices = products.map((p) => p.sourcePrice);
     const sourcePrice = sourcePrices.length > 1 ? sourcePrices.reduce((a, b) => a + b) : sourcePrices[0];
     body.isRemaining = body.paid < sourcePrice;
     body.totalSourcePrice = sourcePrice;
 
-    // await addInventory({ product: product._id, quantity: body.quantity }, next);
+    logger.debug(
+        `addOne() sourcePrices ${stringify(sourcePrices)} sourcePrice ${stringify(
+            sourcePrice
+        )} body.isRemaining ${stringify(body.isRemaining)} body.totalSourcePrice ${stringify(body.totalSourcePrice)}`
+    );
 
     body.supplier = supplier;
     body.products = products;
@@ -109,6 +139,8 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
         return inventory;
     });
 
+    logger.debug(`addOne() inventories ${stringify(inventories)}`);
+
     await createInventories(inventories);
 
     await Model.create(body);
@@ -117,7 +149,17 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
 
 module.exports.edit = catchAsync(async function (req, res, next) {
     const body = _.pick(req.body, ['supplier', 'products', 'paid']);
-    const { purchaseId } = req.params;
+    const purchaseId = req.params.id;
+
+    logger.debug(`edit() purchaseId ${stringify(purchaseId)} body ${stringify(body)}`);
+
+    if (!mongoose.isValidObjectId(purchaseId)) return next(new AppError('Please enter a valid purchase id', 400));
+
+    const purchase = await Model.findById(purchaseId);
+
+    logger.debug(`edit() purchase ${stringify(purchase)}`);
+
+    if (!purchase) return next(new AppError('Purchase does not exist', 404));
 
     if (Object.keys(body).length < 3) return next(new AppError('Please enter a valid purchase', 400));
 
@@ -125,68 +167,85 @@ module.exports.edit = catchAsync(async function (req, res, next) {
 
     const supplier = await Supplier.findById(body.supplier).lean();
 
+    logger.debug(`edit() supplier ${stringify(supplier)}`);
+
     if (!supplier) return next(new AppError('Supplier does not exist', 404));
 
     const productIds = body.products.map((p) => mongoose.Types.ObjectId(p.product));
 
-    const [productsInDB, existingPurchase] = await Promise.all([
-        Product.find({ _id: { $in: productIds } }, { __v: 0 }).lean(),
-        Model.findById(purchaseId, { __v: 0 }),
-    ]);
+    logger.debug(`edit() productIds ${stringify(productIds)}`);
+
+    const productsInDB = await Product.find({ _id: { $in: productIds } }, { __v: 0 }).lean();
+
+    logger.debug(`edit() productsInDB ${stringify(productsInDB)}`);
 
     const products = [];
 
-    for (const p of body.products) {
+    body.products.forEach((p, index) => {
+        logger.debug(`edit() p ${stringify(p)} index ${stringify(index)}`);
+
         p.product = productsInDB.find((e) => e._id.toString() === p.product);
+
+        logger.debug(`edit() p.product ${stringify(p.product)}`);
+
         if (!p.product) return next(new AppError('Product does not exist', 404));
         const { type, unit } = p.product;
 
         if (type.title.toLowerCase() === 'tile') {
             const variants = {};
             Object.entries(p.variants).forEach(([key, value]) => {
-                variants[key] = readQuantityFromString(value, unit.value);
+                const variant = readQuantityFromString(value, unit.value);
+                logger.debug(`edit() value ${stringify(value)} variant ${stringify(variant)}`);
+                variants[key] = variant;
             });
             p.variants = variants;
         } else {
             const quantity = readQuantityFromString(p.quantity, unit.value);
+            logger.debug(`edit() quantity ${stringify(quantity)}`);
             p.quantity = quantity;
         }
 
         products.push(p);
-    }
+    });
 
     const sourcePrices = products.map((p) => p.sourcePrice);
     const sourcePrice = sourcePrices.length > 1 ? sourcePrices.reduce((a, b) => a + b) : sourcePrices[0];
     body.isRemaining = body.paid < sourcePrice;
     body.totalSourcePrice = sourcePrice;
 
-    // await addInventory({ product: product._id, quantity: body.quantity }, next);
+    logger.debug(
+        `edit() sourcePrices ${stringify(sourcePrices)} sourcePrice ${stringify(
+            sourcePrice
+        )} body.isRemaining ${stringify(body.isRemaining)} body.totalSourcePrice ${stringify(body.totalSourcePrice)}`
+    );
 
     body.supplier = supplier;
     body.products = products;
 
     const inventories = products.map((p) => {
         const inventory = { product: p.product._id };
-        const existingProduct = existingPurchase.products.find((e) => e._id.toString() === inventory.product);
+        if (p.product.type.title.toLowerCase() === 'tile') inventory.variants = p.variants;
+        else inventory.quantity = p.quantity;
+        return inventory;
+    });
 
-        if (p.product.type.title.toLowerCase() === 'tile') {
-            if (!existingProduct) inventory.variants = p.variants;
-            else {
-                const existingVariants = { ...existingProduct.variants };
-                Object.entries(p.variants).forEach(([key, value]) => {
-                    if (existingVariants[key]) existingVariants[key] = -existingVariants[key] + value;
-                    else existingVariants[key] = value;
-                });
-                inventory.variants = existingVariants;
-            }
-        } else if (!existingProduct) inventory.quantity = p.quantity;
-        else inventory.quantity = p.quantity + -existingProduct.quantity;
+    logger.debug(`edit() inventories ${stringify(inventories)}`);
+
+    const inventoriesToBeConsumed = purchase.products.map((p) => {
+        const inventory = { product: p.product._id };
+        if (p.product.type.title.toLowerCase() === 'tile') inventory.variants = p.variants;
+        else inventory.quantity = p.quantity;
         return inventory;
     });
 
     await createInventories(inventories);
+    await consumeInventories(inventoriesToBeConsumed);
 
-    await Model.create(body);
+    purchase.supplier = body.supplier;
+    purchase.products = body.products;
+    purchase.paid = body.paid;
+
+    await purchase.save();
     res.status(200).send();
 });
 

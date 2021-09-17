@@ -28,8 +28,6 @@ module.exports.getSales = catchAsync(async function (req, res, next) {
     const results = await Sale.find({ createdAt: { $gte: startDate, $lte: endDate } }).lean();
     const sum = results.map((item) => item.totalRetailPrice).reduce((prev, curr) => prev + curr, 0);
 
-    console.log({ sum });
-
     res.status(200).send({
         sum,
         count: results.length,

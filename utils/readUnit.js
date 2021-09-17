@@ -5,7 +5,6 @@ const readLastValue = (str) => str.slice(-1);
 const readQuantityFromString = (str, boxValue) => {
     const quantity = skipLastValue(str);
     const unit = readLastValue(str).toLowerCase();
-    console.log('unit', str, unit);
     const multiplier = unit === 't' ? 1 : boxValue;
     return quantity * multiplier;
 };

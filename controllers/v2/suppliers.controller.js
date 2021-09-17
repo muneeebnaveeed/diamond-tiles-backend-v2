@@ -74,7 +74,7 @@ module.exports.edit = catchAsync(async function (req, res, next) {
 
     if (!Object.keys(newDoc).length) return next(new AppError('Please enter a valid supplier', 400));
 
-    await Model.findById(id, newDoc, { runValidators: true });
+    await Model.findByIdAndUpdate(id, newDoc, { runValidators: true });
 
     res.status(200).json();
 });

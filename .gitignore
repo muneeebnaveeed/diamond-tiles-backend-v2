@@ -1,4 +1,4 @@
 node_modules
-.development.env
-.production.env
+.env.development
+.env.production
 yarn.lock

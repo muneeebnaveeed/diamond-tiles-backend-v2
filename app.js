@@ -3,6 +3,7 @@ const path = require('path');
 const dotenv = require('dotenv');
 const cors = require('cors');
 
+const chalk = require('chalk');
 const Database = require('./utils/db');
 const AppError = require('./utils/AppError');
 
@@ -24,20 +25,22 @@ const dashboardRoute = require('./routes/dashboard.route');
 const authRoute = require('./routes/auth.route');
 const { errorController } = require('./controllers/errors.controller');
 const { protect } = require('./controllers/auth.controller');
+const Logger = require('./utils/logger');
 
 const app = express();
 
-dotenv.config({ path: path.resolve(process.cwd(), `.${process.env.NODE_ENV}.env`) });
+dotenv.config({ path: path.resolve(process.cwd(), `.env.${process.env.NODE_ENV}`) });
 
 const port = process.env.PORT || 5500;
+const logger = Logger('app');
 
 app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    logger.info(`Server running on PORT ${chalk.green(port)}`);
 
     new Database()
         .connect()
-        .then(() => console.log('Connected to DB'))
-        .catch((err) => console.log(err.message));
+        .then(() => logger.info('Connected to DB'))
+        .catch((err) => logger.error('Unable to connect to DB', err));
 
     app.use(express.json());
 
@@ -62,8 +65,6 @@ app.listen(port, () => {
     app.use('/expenses', protect, expensesRoute);
     app.use('/dashboard', protect, dashboardRoute);
 
-    // app.use('/categories', protect, categoriesRoute);
-    // app.use('/orders', protect, ordersRoute);
     app.use('/auth', authRoute);
 
     app.use('*', (req, res, next) => next(new AppError(`Cannot find ${req.originalUrl} on the server!`, 404)));

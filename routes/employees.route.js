@@ -6,6 +6,8 @@ const { getAll, addOne, edit, remove, getOne } = require('../controllers/employe
 router.get('/', autoParams, getAll);
 router.get('/id/:id', autoParams, getOne);
 router.route('/').post(addOne);
+router.get('/id/:id', edit);
+
 router.route('/id/:id').patch(edit);
 router.route('/id/:id').delete(remove);
 

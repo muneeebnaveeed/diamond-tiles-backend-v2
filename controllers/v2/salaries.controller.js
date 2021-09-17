@@ -12,7 +12,6 @@ module.exports.getAll = catchAsync(async function (req, res, next) {
         {},
         {
             projection: { __v: 0 },
-            populate: { path: 'employee', select: '_id name' },
             page,
             limit,
         }
@@ -27,6 +26,27 @@ module.exports.addOne = catchAsync(async function (req, res, next) {
     if (!employee) return next(new AppError('Employee does not exist', 404));
     body.employee = employee;
     await Model.create(body);
+    res.status(200).send();
+});
+
+module.exports.edit = catchAsync(async function (req, res, next) {
+    const body = _.pick(req.body, ['employee', 'amount']);
+    const salaryId = req.params.id;
+    if (!mongoose.isValidObjectId(salaryId)) return next(new AppError('Invalid salary id', 400));
+
+    const salary = Model.findById(salaryId);
+
+    if (!salary) return next(new AppError('Salary does not exist', 404));
+
+    if (!mongoose.isValidObjectId(body.employee)) return next(new AppError('Invalid employee id', 400));
+    const employee = await Employee.findById(body.employee);
+    if (!employee) return next(new AppError('Employee does not exist', 404));
+    body.employee = employee;
+
+    salary.employee = body.employee;
+    salary.amount = body.amount;
+
+    await salary.save();
     res.status(200).send();
 });
 
